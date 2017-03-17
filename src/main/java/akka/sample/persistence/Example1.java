@@ -55,6 +55,13 @@ public class Example1 {
         sleep(Duration.create("10 seconds"));
         runner.tell(deposit(AccountIdentifier.create("400"), CurrencyValue.create(123.45)), null);
         runner.tell(withdrawal(AccountIdentifier.create("400"), CurrencyValue.create(123.45)), null);
+
+        sleep(Duration.create("10 seconds"));
+        runner.tell(get(AccountIdentifier.create("100")), null);
+        runner.tell(get(AccountIdentifier.create("200")), null);
+        runner.tell(get(AccountIdentifier.create("300")), null);
+        runner.tell(get(AccountIdentifier.create("400")), null);
+        runner.tell(get(AccountIdentifier.create("500")), null);
     }
 
     private CommandDeposit deposit(AccountIdentifier identifier, CurrencyValue amount) {
@@ -63,6 +70,10 @@ public class Example1 {
 
     private CommandWithdrawal withdrawal(AccountIdentifier identifier, CurrencyValue amount) {
         return new CommandWithdrawal(identifier, amount);
+    }
+
+    private GetAccountRequest get(AccountIdentifier accountIdentifier) {
+        return new GetAccountRequest(accountIdentifier);
     }
 
     private void shutdownActorSystem() {
@@ -92,8 +103,11 @@ public class Example1 {
             receive(ReceiveBuilder
                     .match(CommandDeposit.class, this::sendDeposit)
                     .match(CommandWithdrawal.class, this::sendWithdrawal)
+                    .match(GetAccountRequest.class, this::sendGetAccountRequest)
                     .match(EventDeposit.class, this::depositCompleted)
                     .match(EventWithdrawal.class, this::withdrawalCompleted)
+                    .match(GetAccountResponse.class, this::getAccountResponse)
+                    .match(GetAccountNotFound.class, this::getAccountNotFound)
                     .matchAny(this::unhandledMessage)
                     .build());
         }
@@ -110,12 +124,24 @@ public class Example1 {
             accounts.tell(withdrawal, self());
         }
 
+        private void sendGetAccountRequest(GetAccountRequest getAccountRequest) {
+            accounts.tell(getAccountRequest, self());
+        }
+
         private void depositCompleted(EventDeposit deposit) {
             log().info("Completed {}", deposit);
         }
 
         private void withdrawalCompleted(EventWithdrawal withdrawal) {
             log().info("Completed {}", withdrawal);
+        }
+
+        private void getAccountResponse(GetAccountResponse getAccountResponse) {
+            log().info("{}", getAccountResponse);
+        }
+
+        private void getAccountNotFound(GetAccountNotFound getAccountNotFound) {
+            log().info("{}", getAccountNotFound);
         }
 
         private void unhandledMessage(Object message) {

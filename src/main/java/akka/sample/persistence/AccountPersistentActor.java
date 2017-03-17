@@ -2,7 +2,6 @@ package akka.sample.persistence;
 
 import akka.actor.Cancellable;
 import akka.actor.Props;
-import akka.actor.ReceiveTimeout;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import akka.japi.pf.ReceiveBuilder;
@@ -27,6 +26,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
     private Account account;
     private Cancellable snapshotScheduler;
     private Cancellable idleTimeout;
+    private boolean persisted = false;
     private boolean pendingChanges = false;
 
     {
@@ -61,6 +61,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
         return ReceiveBuilder
                 .match(CommandDeposit.class, this::receiveCommandDeposit)
                 .match(CommandWithdrawal.class, this::receiveCommendWithdrawal)
+                .match(GetAccountRequest.class, this::getAccount)
                 .match(IdleTimeout.class, this::receiveTimeout)
                 .match(SnapshotTick.class, this::snapshotPendingChanges)
                 .match(SaveSnapshotSuccess.class, this::snapshotSuccess)
@@ -71,18 +72,19 @@ class AccountPersistentActor extends AbstractPersistentActor {
     private void recoverEventDeposit(EventDeposit eventDeposit) {
         log.info("Recover {}", eventDeposit);
         account.deposit(eventDeposit.amount());
-        resetIdleTimeout();
+        persisted = true;
     }
 
     private void recoverEventWithdrawal(EventWithdrawal eventWithdrawal) {
         log.info("Recover {}", eventWithdrawal);
         account.withdrawal(eventWithdrawal.amount());
-        resetIdleTimeout();
+        persisted = true;
     }
 
     private void recoverSnapshot(SnapshotOffer snapshotOffer) {
         log.info("Recover {} {}", snapshotOffer, snapshotOffer.snapshot());
         account = (Account) snapshotOffer.snapshot();
+        persisted = true;
     }
 
     private void receiveCommandDeposit(CommandDeposit commandDeposit) {
@@ -93,7 +95,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
             account.deposit(event.amount());
             sender().tell(event, self());
             resetIdleTimeout();
-            pendingChanges = true;
+            persisted = pendingChanges = true;
             log.info("State change {}", account);
         });
     }
@@ -106,9 +108,18 @@ class AccountPersistentActor extends AbstractPersistentActor {
             account.withdrawal(event.amount());
             sender().tell(event, self());
             resetIdleTimeout();
-            pendingChanges = true;
+            persisted = pendingChanges = true;
             log.info("State change {}", account);
         });
+    }
+
+    private void getAccount(GetAccountRequest getAccountRequest) {
+        if (persisted) {
+            sender().tell(new GetAccountResponse(account), self());
+        } else {
+            sender().tell(new GetAccountNotFound(getAccountRequest.accountIdentifier()), self());
+        }
+        log.info("Get account {} {}persisted", getAccountRequest.accountIdentifier, persisted ? "" : "not ");
     }
 
     private void snapshotPendingChanges(SnapshotTick snapshotTick) {
@@ -303,6 +314,49 @@ class AccountPersistentActor extends AbstractPersistentActor {
         @Override
         public String toString() {
             return String.format("%s[%s, %s, %s]", getClass().getSimpleName(), time, accountIdentifier, amount);
+        }
+    }
+
+    static class GetAccountRequest implements Serializable {
+        private final AccountIdentifier accountIdentifier;
+
+        GetAccountRequest(AccountIdentifier accountIdentifier) {
+            this.accountIdentifier = accountIdentifier;
+        }
+
+        AccountIdentifier accountIdentifier() {
+            return accountIdentifier;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%s]", getClass().getSimpleName(), accountIdentifier);
+        }
+    }
+
+    static class GetAccountResponse implements Serializable {
+        private final Account account;
+
+        GetAccountResponse(Account account) {
+            this.account = account;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%s]", getClass().getSimpleName(), account);
+        }
+    }
+
+    static class GetAccountNotFound implements Serializable {
+        private final AccountIdentifier accountIdentifier;
+
+        GetAccountNotFound(AccountIdentifier accountIdentifier) {
+            this.accountIdentifier = accountIdentifier;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%s]", getClass().getSimpleName(), accountIdentifier);
         }
     }
 }

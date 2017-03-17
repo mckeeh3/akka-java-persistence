@@ -18,6 +18,7 @@ class AccountsActor extends AbstractLoggingActor {
         receive(ReceiveBuilder
                 .match(AccountPersistentActor.CommandDeposit.class, this::deposit)
                 .match(AccountPersistentActor.CommandWithdrawal.class, this::withdrawal)
+                .match(AccountPersistentActor.GetAccountRequest.class, this::getAccountRequest)
                 .build());
     }
 
@@ -27,6 +28,10 @@ class AccountsActor extends AbstractLoggingActor {
 
     private void withdrawal(AccountPersistentActor.CommandWithdrawal withdrawal) {
         sendCommandToAccount(withdrawal.accountIdentifier(), withdrawal);
+    }
+
+    private void getAccountRequest(AccountPersistentActor.GetAccountRequest getAccountRequest) {
+        sendCommandToAccount(getAccountRequest.accountIdentifier(), getAccountRequest);
     }
 
     private void sendCommandToAccount(AccountIdentifier accountIdentifier, Object message) {
