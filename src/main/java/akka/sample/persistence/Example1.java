@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.concurrent.duration.Duration;
 
+import static akka.sample.persistence.AccountPersistentActor.*;
+
 
 /**
  * An example of simple Akka persistence.
@@ -49,14 +51,18 @@ public class Example1 {
         sleep(Duration.create("10 seconds"));
         runner.tell(deposit(AccountIdentifier.create("300"), CurrencyValue.create(25)), null);
         runner.tell(withdrawal(AccountIdentifier.create("300"), CurrencyValue.create(25)), null);
+
+        sleep(Duration.create("10 seconds"));
+        runner.tell(deposit(AccountIdentifier.create("400"), CurrencyValue.create(123.45)), null);
+        runner.tell(withdrawal(AccountIdentifier.create("400"), CurrencyValue.create(123.45)), null);
     }
 
-    private AccountPersistentActor.CommandDeposit deposit(AccountIdentifier identifier, CurrencyValue amount) {
-        return new AccountPersistentActor.CommandDeposit(identifier, amount);
+    private CommandDeposit deposit(AccountIdentifier identifier, CurrencyValue amount) {
+        return new CommandDeposit(identifier, amount);
     }
 
-    private AccountPersistentActor.CommandWithdrawal withdrawal(AccountIdentifier identifier, CurrencyValue amount) {
-        return new AccountPersistentActor.CommandWithdrawal(identifier, amount);
+    private CommandWithdrawal withdrawal(AccountIdentifier identifier, CurrencyValue amount) {
+        return new CommandWithdrawal(identifier, amount);
     }
 
     private void shutdownActorSystem() {
@@ -84,10 +90,10 @@ public class Example1 {
 
         {
             receive(ReceiveBuilder
-                    .match(AccountPersistentActor.CommandDeposit.class, this::sendDeposit)
-                    .match(AccountPersistentActor.CommandWithdrawal.class, this::sendWithdrawal)
-                    .match(AccountPersistentActor.EventDeposit.class, this::depositCompleted)
-                    .match(AccountPersistentActor.EventWithdrawal.class, this::withdrawalCompleted)
+                    .match(CommandDeposit.class, this::sendDeposit)
+                    .match(CommandWithdrawal.class, this::sendWithdrawal)
+                    .match(EventDeposit.class, this::depositCompleted)
+                    .match(EventWithdrawal.class, this::withdrawalCompleted)
                     .matchAny(this::unhandledMessage)
                     .build());
         }
@@ -96,19 +102,19 @@ public class Example1 {
             this.accounts = accounts;
         }
 
-        private void sendDeposit(AccountPersistentActor.CommandDeposit deposit) {
+        private void sendDeposit(CommandDeposit deposit) {
             accounts.tell(deposit, self());
         }
 
-        private void sendWithdrawal(AccountPersistentActor.CommandWithdrawal withdrawal) {
+        private void sendWithdrawal(CommandWithdrawal withdrawal) {
             accounts.tell(withdrawal, self());
         }
 
-        private void depositCompleted(AccountPersistentActor.EventDeposit deposit) {
+        private void depositCompleted(EventDeposit deposit) {
             log().info("Completed {}", deposit);
         }
 
-        private void withdrawalCompleted(AccountPersistentActor.EventWithdrawal withdrawal) {
+        private void withdrawalCompleted(EventWithdrawal withdrawal) {
             log().info("Completed {}", withdrawal);
         }
 
