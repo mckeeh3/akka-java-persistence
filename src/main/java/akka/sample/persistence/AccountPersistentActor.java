@@ -143,7 +143,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
     }
 
     private void scheduleSnapshot() {
-        FiniteDuration interval = Duration.create(10, TimeUnit.SECONDS);
+        FiniteDuration interval = Duration.create(10, TimeUnit.SECONDS); // TODO make this configurable
 
         snapshotScheduler = context().system().scheduler().schedule(
                 interval,
