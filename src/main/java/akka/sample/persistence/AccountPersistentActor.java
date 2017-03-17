@@ -7,6 +7,7 @@ import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import akka.japi.pf.ReceiveBuilder;
 import akka.persistence.AbstractPersistentActor;
+import akka.persistence.RecoveryCompleted;
 import akka.persistence.SaveSnapshotSuccess;
 import akka.persistence.SnapshotOffer;
 import scala.PartialFunction;
@@ -14,6 +15,8 @@ import scala.concurrent.duration.Duration;
 import scala.concurrent.duration.FiniteDuration;
 import scala.runtime.BoxedUnit;
 
+import java.io.Serializable;
+import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -23,20 +26,12 @@ class AccountPersistentActor extends AbstractPersistentActor {
     private final LoggingAdapter log = Logging.getLogger(context().system(), this);
     private Account account;
     private Cancellable snapshotScheduler;
+    private Cancellable idleTimeout;
     private boolean pendingChanges = false;
 
     {
-        receive(ReceiveBuilder
-                .match(ReceiveTimeout.class, this::receiveTimeout)
-                .build());
-
         resetIdleTimeout();
         scheduleSnapshot();
-    }
-
-    private void receiveTimeout(ReceiveTimeout receiveTimeout) {
-        log.info("Idle timeout {} {}", account, receiveTimeout);
-        context().stop(self());
     }
 
     AccountPersistentActor(AccountIdentifier accountIdentifier) {
@@ -66,9 +61,10 @@ class AccountPersistentActor extends AbstractPersistentActor {
         return ReceiveBuilder
                 .match(CommandDeposit.class, this::receiveCommandDeposit)
                 .match(CommandWithdrawal.class, this::receiveCommendWithdrawal)
-                .match(ReceiveTimeout.class, this::receiveTimeout)
+                .match(IdleTimeout.class, this::receiveTimeout)
                 .match(SnapshotTick.class, this::snapshotPendingChanges)
                 .match(SaveSnapshotSuccess.class, this::snapshotSuccess)
+                .match(RecoveryCompleted.class, this::recoveryCompleted)
                 .build();
     }
 
@@ -95,6 +91,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
 
         persist(eventDeposit, event -> {
             account.deposit(event.amount());
+            sender().tell(event, self());
             resetIdleTimeout();
             pendingChanges = true;
             log.info("State change {}", account);
@@ -107,6 +104,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
 
         persist(eventWithdrawal, event -> {
             account.withdrawal(event.amount());
+            sender().tell(event, self());
             resetIdleTimeout();
             pendingChanges = true;
             log.info("State change {}", account);
@@ -125,6 +123,10 @@ class AccountPersistentActor extends AbstractPersistentActor {
         log.info("Snapshot success {}", saveSnapshotSuccess.metadata());
     }
 
+    private void recoveryCompleted(RecoveryCompleted recoveryCompleted) {
+        log.info("RecoveryCompleted {}", recoveryCompleted);
+    }
+
     @Override
     public void preStart() throws Exception {
         log.info("Start {}", account);
@@ -133,13 +135,35 @@ class AccountPersistentActor extends AbstractPersistentActor {
     @Override
     public void postStop() {
         log.info("Stop {}", account);
+
+        if (idleTimeout != null) {
+            idleTimeout.cancel();
+        }
         if (snapshotScheduler != null) {
             snapshotScheduler.cancel();
         }
     }
 
+    private void receiveTimeout(IdleTimeout idleTimeout) {
+        log.info("Idle timeout {}, {} timeout", account, idleTimeout);
+        context().stop(self());
+    }
+
     private void resetIdleTimeout() {
-        context().setReceiveTimeout(Duration.create(10, TimeUnit.SECONDS)); // TODO make this configurable
+        // This is not working - see https://github.com/akka/akka/issues/20738
+        // context().setReceiveTimeout(Duration.create(10, TimeUnit.SECONDS)); // TODO make this configurable
+        FiniteDuration timeout = Duration.create(10, TimeUnit.SECONDS); // TODO make this configurable
+
+        if (idleTimeout != null) {
+            idleTimeout.cancel();
+        }
+        idleTimeout = context().system().scheduler().schedule(
+                timeout,
+                timeout,
+                self(),
+                new IdleTimeout(timeout),
+                context().system().dispatcher(),
+                self());
     }
 
     private void scheduleSnapshot() {
@@ -154,6 +178,131 @@ class AccountPersistentActor extends AbstractPersistentActor {
                 self());
     }
 
+    private static class IdleTimeout {
+        private final Duration timeout;
+
+        private IdleTimeout(Duration timeout) {
+            this.timeout = timeout;
+        }
+
+        @Override
+        public String toString() {
+            return timeout.toString();
+        }
+    }
+
     private static class SnapshotTick {
+    }
+
+    static class CommandDeposit implements Serializable {
+        private final AccountIdentifier accountIdentifier;
+        private final CurrencyValue amount;
+
+        CommandDeposit(AccountIdentifier accountIdentifier, CurrencyValue amount) {
+            this.accountIdentifier = accountIdentifier;
+            this.amount = amount;
+        }
+
+        AccountIdentifier accountIdentifier() {
+            return accountIdentifier;
+        }
+
+        CurrencyValue amount() {
+            return amount;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%s, %s]", getClass().getSimpleName(), accountIdentifier, amount);
+        }
+    }
+
+    static class CommandWithdrawal implements Serializable {
+        private final AccountIdentifier accountIdentifier;
+        private final CurrencyValue amount;
+
+        CommandWithdrawal(AccountIdentifier accountIdentifier, CurrencyValue amount) {
+            this.accountIdentifier = accountIdentifier;
+            this.amount = amount;
+        }
+
+        AccountIdentifier accountIdentifier() {
+            return accountIdentifier;
+        }
+
+        CurrencyValue amount() {
+            return amount;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%s, %s]", getClass().getSimpleName(), accountIdentifier, amount);
+        }
+    }
+
+    static public class EventDeposit implements Serializable {
+        private final AccountIdentifier accountIdentifier;
+        private final CurrencyValue amount;
+        private final LocalDateTime time;
+
+        EventDeposit(AccountIdentifier accountIdentifier, CurrencyValue amount) {
+            this(accountIdentifier, amount, LocalDateTime.now());
+        }
+
+        EventDeposit(AccountIdentifier accountIdentifier, CurrencyValue amount, LocalDateTime time) {
+            this.accountIdentifier = accountIdentifier;
+            this.amount = amount;
+            this.time = time;
+        }
+
+        AccountIdentifier accountIdentifier() {
+            return accountIdentifier;
+        }
+
+        CurrencyValue amount() {
+            return amount;
+        }
+
+        LocalDateTime time() {
+            return time;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%s, %s, %s]", getClass().getSimpleName(), time, accountIdentifier, amount);
+        }
+    }
+
+    static class EventWithdrawal implements Serializable {
+        private final AccountIdentifier accountIdentifier;
+        private final CurrencyValue amount;
+        private final LocalDateTime time;
+
+        EventWithdrawal(AccountIdentifier accountIdentifier, CurrencyValue amount) {
+            this(accountIdentifier, amount, LocalDateTime.now());
+        }
+
+        EventWithdrawal(AccountIdentifier accountIdentifier, CurrencyValue amount, LocalDateTime time) {
+            this.accountIdentifier = accountIdentifier;
+            this.amount = amount;
+            this.time = time;
+        }
+
+        AccountIdentifier accountIdentifier() {
+            return accountIdentifier;
+        }
+
+        CurrencyValue amount() {
+            return amount;
+        }
+
+        LocalDateTime time() {
+            return time;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%s, %s, %s]", getClass().getSimpleName(), time, accountIdentifier, amount);
+        }
     }
 }

@@ -1,7 +1,10 @@
 package akka.sample.persistence;
 
+import akka.actor.AbstractLoggingActor;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+import akka.actor.Props;
+import akka.japi.pf.ReceiveBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.concurrent.duration.Duration;
@@ -27,17 +30,33 @@ public class Example1 {
 
     private void runExamples() {
         ActorRef accounts = actorSystem.actorOf(AccountsActor.props(), "accounts");
+        ActorRef runner = actorSystem.actorOf(Runner.props(accounts), "runner");
 
-        accounts.tell(new CommandDeposit(AccountIdentifier.create("100"), CurrencyValue.create(100)), null);
-        accounts.tell(new CommandDeposit(AccountIdentifier.create("200"), CurrencyValue.create(50)), null);
-        accounts.tell(new CommandDeposit(AccountIdentifier.create("300"), CurrencyValue.create(50)), null);
-        accounts.tell(new CommandDeposit(AccountIdentifier.create("100"), CurrencyValue.create(200)), null);
-        accounts.tell(new CommandWithdrawal(AccountIdentifier.create("100"), CurrencyValue.create(99.95)), null);
-        accounts.tell(new CommandWithdrawal(AccountIdentifier.create("300"), CurrencyValue.create(25)), null);
-        accounts.tell(new CommandDeposit(AccountIdentifier.create("100"), CurrencyValue.create(200)), null);
-        accounts.tell(new CommandWithdrawal(AccountIdentifier.create("300"), CurrencyValue.create(25)), null);
-        accounts.tell(new CommandDeposit(AccountIdentifier.create("200"), CurrencyValue.create(15.55)), null);
-        accounts.tell(new CommandWithdrawal(AccountIdentifier.create("200"), CurrencyValue.create(19.99)), null);
+        runner.tell(deposit(AccountIdentifier.create("100"), CurrencyValue.create(100)), null);
+        runner.tell(deposit(AccountIdentifier.create("200"), CurrencyValue.create(50)), null);
+        runner.tell(deposit(AccountIdentifier.create("300"), CurrencyValue.create(50)), null);
+        runner.tell(deposit(AccountIdentifier.create("100"), CurrencyValue.create(200)), null);
+        runner.tell(withdrawal(AccountIdentifier.create("100"), CurrencyValue.create(99.95)), null);
+        runner.tell(withdrawal(AccountIdentifier.create("300"), CurrencyValue.create(25)), null);
+        runner.tell(deposit(AccountIdentifier.create("100"), CurrencyValue.create(200)), null);
+        runner.tell(withdrawal(AccountIdentifier.create("300"), CurrencyValue.create(25)), null);
+        runner.tell(deposit(AccountIdentifier.create("200"), CurrencyValue.create(15.55)), null);
+        runner.tell(withdrawal(AccountIdentifier.create("200"), CurrencyValue.create(19.99)), null);
+
+        sleep(Duration.create("5 seconds"));
+        runner.tell(deposit(AccountIdentifier.create("100"), CurrencyValue.create(200)), null);
+
+        sleep(Duration.create("10 seconds"));
+        runner.tell(deposit(AccountIdentifier.create("300"), CurrencyValue.create(25)), null);
+        runner.tell(withdrawal(AccountIdentifier.create("300"), CurrencyValue.create(25)), null);
+    }
+
+    private AccountPersistentActor.CommandDeposit deposit(AccountIdentifier identifier, CurrencyValue amount) {
+        return new AccountPersistentActor.CommandDeposit(identifier, amount);
+    }
+
+    private AccountPersistentActor.CommandWithdrawal withdrawal(AccountIdentifier identifier, CurrencyValue amount) {
+        return new AccountPersistentActor.CommandWithdrawal(identifier, amount);
     }
 
     private void shutdownActorSystem() {
@@ -58,5 +77,47 @@ public class Example1 {
     public static void main(String[] arguments) {
         log.info("Start {} examples", Example1.class.getSimpleName());
         new Example1();
+    }
+
+    private static class Runner extends AbstractLoggingActor {
+        private final ActorRef accounts;
+
+        {
+            receive(ReceiveBuilder
+                    .match(AccountPersistentActor.CommandDeposit.class, this::sendDeposit)
+                    .match(AccountPersistentActor.CommandWithdrawal.class, this::sendWithdrawal)
+                    .match(AccountPersistentActor.EventDeposit.class, this::depositCompleted)
+                    .match(AccountPersistentActor.EventWithdrawal.class, this::withdrawalCompleted)
+                    .matchAny(this::unhandledMessage)
+                    .build());
+        }
+
+        private Runner(ActorRef accounts) {
+            this.accounts = accounts;
+        }
+
+        private void sendDeposit(AccountPersistentActor.CommandDeposit deposit) {
+            accounts.tell(deposit, self());
+        }
+
+        private void sendWithdrawal(AccountPersistentActor.CommandWithdrawal withdrawal) {
+            accounts.tell(withdrawal, self());
+        }
+
+        private void depositCompleted(AccountPersistentActor.EventDeposit deposit) {
+            log().info("Completed {}", deposit);
+        }
+
+        private void withdrawalCompleted(AccountPersistentActor.EventWithdrawal withdrawal) {
+            log().info("Completed {}", withdrawal);
+        }
+
+        private void unhandledMessage(Object message) {
+            log().warning("Unhandled message {}", message);
+        }
+
+        static Props props(ActorRef account) {
+            return Props.create(Runner.class, account);
+        }
     }
 }

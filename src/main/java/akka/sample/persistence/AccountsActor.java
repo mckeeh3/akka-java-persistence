@@ -16,16 +16,16 @@ class AccountsActor extends AbstractLoggingActor {
 
     {
         receive(ReceiveBuilder
-                .match(CommandDeposit.class, this::deposit)
-                .match(CommandWithdrawal.class, this::withdrawal)
+                .match(AccountPersistentActor.CommandDeposit.class, this::deposit)
+                .match(AccountPersistentActor.CommandWithdrawal.class, this::withdrawal)
                 .build());
     }
 
-    private void deposit(CommandDeposit deposit) {
+    private void deposit(AccountPersistentActor.CommandDeposit deposit) {
         sendCommandToAccount(deposit.accountIdentifier(), deposit);
     }
 
-    private void withdrawal(CommandWithdrawal withdrawal) {
+    private void withdrawal(AccountPersistentActor.CommandWithdrawal withdrawal) {
         sendCommandToAccount(withdrawal.accountIdentifier(), withdrawal);
     }
 
