@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.concurrent.duration.Duration;
 
+import java.math.BigDecimal;
+
 import static akka.sample.persistence.AccountPersistentActor.*;
 
 
@@ -138,6 +140,7 @@ public class Example1 {
 
         private void getAccountResponse(GetAccountResponse getAccountResponse) {
             log().info("{}", getAccountResponse);
+            zeroAccountBalance(getAccountResponse.account());
         }
 
         private void getAccountNotFound(GetAccountNotFound getAccountNotFound) {
@@ -146,6 +149,12 @@ public class Example1 {
 
         private void unhandledMessage(Object message) {
             log().warning("Unhandled message {}", message);
+        }
+
+        private void zeroAccountBalance(Account account) {
+            if (!account.balance().amount().equals(BigDecimal.ZERO)) {
+                accounts.tell(new CommandWithdrawal(account.accountIdentifier(), account.balance()), self());
+            }
         }
 
         static Props props(ActorRef account) {

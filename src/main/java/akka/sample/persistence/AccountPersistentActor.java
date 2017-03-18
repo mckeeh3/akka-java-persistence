@@ -341,6 +341,10 @@ class AccountPersistentActor extends AbstractPersistentActor {
             this.account = account;
         }
 
+        Account account() {
+            return account;
+        }
+
         @Override
         public String toString() {
             return String.format("%s[%s]", getClass().getSimpleName(), account);
