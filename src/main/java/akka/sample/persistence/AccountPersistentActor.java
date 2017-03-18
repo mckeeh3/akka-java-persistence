@@ -9,6 +9,7 @@ import akka.persistence.AbstractPersistentActor;
 import akka.persistence.RecoveryCompleted;
 import akka.persistence.SaveSnapshotSuccess;
 import akka.persistence.SnapshotOffer;
+import scala.Option;
 import scala.PartialFunction;
 import scala.concurrent.duration.Duration;
 import scala.concurrent.duration.FiniteDuration;
@@ -57,16 +58,31 @@ class AccountPersistentActor extends AbstractPersistentActor {
     }
 
     @Override
+    public void onRecoveryFailure(Throwable cause, Option<Object> event) {
+        super.onRecoveryFailure(cause, event);
+    }
+
+    @Override
     public PartialFunction<Object, BoxedUnit> receiveCommand() {
         return ReceiveBuilder
                 .match(CommandDeposit.class, this::receiveCommandDeposit)
                 .match(CommandWithdrawal.class, this::receiveCommendWithdrawal)
-                .match(GetAccountRequest.class, this::getAccount)
+                .match(CommandGetAccount.class, this::getAccount)
                 .match(IdleTimeout.class, this::receiveTimeout)
                 .match(SnapshotTick.class, this::snapshotPendingChanges)
                 .match(SaveSnapshotSuccess.class, this::snapshotSuccess)
                 .match(RecoveryCompleted.class, this::recoveryCompleted)
                 .build();
+    }
+
+    @Override
+    public void onPersistFailure(Throwable cause, Object event, long seqNr) {
+        super.onPersistFailure(cause, event, seqNr);
+    }
+
+    @Override
+    public void onPersistRejected(Throwable cause, Object event, long seqNr) {
+        super.onPersistRejected(cause, event, seqNr);
     }
 
     private void recoverEventDeposit(EventDeposit eventDeposit) {
@@ -96,7 +112,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
             sender().tell(event, self());
             resetIdleTimeout();
             persisted = pendingChanges = true;
-            log.info("State change {}", account);
+            log.info("State change {} deposit {}", account, event.amount());
         });
     }
 
@@ -109,24 +125,25 @@ class AccountPersistentActor extends AbstractPersistentActor {
             sender().tell(event, self());
             resetIdleTimeout();
             persisted = pendingChanges = true;
-            log.info("State change {}", account);
+            log.info("State change {} withdraw {}", account, event.amount());
         });
     }
 
-    private void getAccount(GetAccountRequest getAccountRequest) {
+    private void getAccount(CommandGetAccount commandGetAccount) {
         if (persisted) {
             sender().tell(new GetAccountResponse(account), self());
+            log.info("Get account {}", account);
         } else {
-            sender().tell(new GetAccountNotFound(getAccountRequest.accountIdentifier()), self());
+            sender().tell(new GetAccountNotFound(commandGetAccount.accountIdentifier()), self());
+            log.info("Get account {} not found", commandGetAccount.accountIdentifier);
         }
-        log.info("Get account {} {}persisted", getAccountRequest.accountIdentifier, persisted ? "" : "not ");
     }
 
     private void snapshotPendingChanges(SnapshotTick snapshotTick) {
         if (pendingChanges) {
             saveSnapshot(account);
             pendingChanges = false;
-            log.info("Snapshot {}", account);
+            log.info("Snapshot {} {}", account, snapshotTick);
         }
     }
 
@@ -178,7 +195,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
     }
 
     private void scheduleSnapshot() {
-        FiniteDuration interval = Duration.create(10, TimeUnit.SECONDS); // TODO make this configurable
+        FiniteDuration interval = Duration.create(5, TimeUnit.SECONDS); // TODO make this configurable
 
         snapshotScheduler = context().system().scheduler().schedule(
                 interval,
@@ -317,10 +334,10 @@ class AccountPersistentActor extends AbstractPersistentActor {
         }
     }
 
-    static class GetAccountRequest implements Serializable {
+    static class CommandGetAccount implements Serializable {
         private final AccountIdentifier accountIdentifier;
 
-        GetAccountRequest(AccountIdentifier accountIdentifier) {
+        CommandGetAccount(AccountIdentifier accountIdentifier) {
             this.accountIdentifier = accountIdentifier;
         }
 

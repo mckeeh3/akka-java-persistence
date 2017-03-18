@@ -15,10 +15,23 @@ import static akka.sample.persistence.AccountPersistentActor.*;
 
 
 /**
- * An example of simple Akka persistence.
+ * An example of event sourcing with Akka persistence.
+ *
+ * <p>This example contains an actor that simulates the interaction of actors with persistence actors. The {@link
+ * Runner} actor is used to send messages to the {@link AccountsActor}. These messages are commands to be processed by
+ * the {@link AccountPersistentActor}.</p>
+ *
+ * <p>The {@link #runExamples()} method sends a series of commands to the {@link Runner} actor, which in turn sends
+ * these commands to the {@link AccountsActor}. The {@link Runner} actor is also used to receive response messages
+ * from the {@link AccountPersistentActor} actors.</p>
+ *
+ * <p>The tests are split by periods of idle time. This is to allow for showing the the {@link AccountPersistentActor}
+ * actor stops after a period of idle time. The last thing done at the conclusion of the test run is to perform a
+ * series of get commands that retrieve the account entity. The account entity balance is then withdrawn. This is done
+ * to set the account balance to zero.</p>
  */
-public class Example1 {
-    private static final Logger log = LoggerFactory.getLogger(Example1.class);
+public class ExampleEventSourcing {
+    private static final Logger log = LoggerFactory.getLogger(ExampleEventSourcing.class);
     private final ActorSystem actorSystem;
 
     {
@@ -74,8 +87,8 @@ public class Example1 {
         return new CommandWithdrawal(identifier, amount);
     }
 
-    private GetAccountRequest get(AccountIdentifier accountIdentifier) {
-        return new GetAccountRequest(accountIdentifier);
+    private CommandGetAccount get(AccountIdentifier accountIdentifier) {
+        return new CommandGetAccount(accountIdentifier);
     }
 
     private void shutdownActorSystem() {
@@ -94,8 +107,8 @@ public class Example1 {
     }
 
     public static void main(String[] arguments) {
-        log.info("Start {} examples", Example1.class.getSimpleName());
-        new Example1();
+        log.info("Start {} examples", ExampleEventSourcing.class.getSimpleName());
+        new ExampleEventSourcing();
     }
 
     private static class Runner extends AbstractLoggingActor {
@@ -105,7 +118,7 @@ public class Example1 {
             receive(ReceiveBuilder
                     .match(CommandDeposit.class, this::sendDeposit)
                     .match(CommandWithdrawal.class, this::sendWithdrawal)
-                    .match(GetAccountRequest.class, this::sendGetAccountRequest)
+                    .match(CommandGetAccount.class, this::sendGetAccountRequest)
                     .match(EventDeposit.class, this::depositCompleted)
                     .match(EventWithdrawal.class, this::withdrawalCompleted)
                     .match(GetAccountResponse.class, this::getAccountResponse)
@@ -126,8 +139,8 @@ public class Example1 {
             accounts.tell(withdrawal, self());
         }
 
-        private void sendGetAccountRequest(GetAccountRequest getAccountRequest) {
-            accounts.tell(getAccountRequest, self());
+        private void sendGetAccountRequest(CommandGetAccount commandGetAccount) {
+            accounts.tell(commandGetAccount, self());
         }
 
         private void depositCompleted(EventDeposit deposit) {
