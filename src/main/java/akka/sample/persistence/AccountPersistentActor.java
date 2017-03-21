@@ -20,7 +20,6 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -58,12 +57,8 @@ class AccountPersistentActor extends AbstractPersistentActor {
                 .match(EventDeposit.class, this::recoverEventDeposit)
                 .match(EventWithdrawal.class, this::recoverEventWithdrawal)
                 .match(SnapshotOffer.class, this::recoverSnapshot)
+                .match(RecoveryCompleted.class, this::recoveryCompleted)
                 .build();
-    }
-
-    @Override
-    public void onRecoveryFailure(Throwable cause, Option<Object> event) {
-        super.onRecoveryFailure(cause, event);
     }
 
     @Override
@@ -75,7 +70,6 @@ class AccountPersistentActor extends AbstractPersistentActor {
                 .match(IdleTimeout.class, this::receiveTimeout)
                 .match(SnapshotTick.class, this::snapshotPendingChanges)
                 .match(SaveSnapshotSuccess.class, this::snapshotSuccess)
-                .match(RecoveryCompleted.class, this::recoveryCompleted)
                 .build();
     }
 
@@ -87,6 +81,11 @@ class AccountPersistentActor extends AbstractPersistentActor {
     @Override
     public void onPersistRejected(Throwable cause, Object event, long seqNr) {
         super.onPersistRejected(cause, event, seqNr);
+    }
+
+    @Override
+    public void onRecoveryFailure(Throwable cause, Option<Object> event) {
+        super.onRecoveryFailure(cause, event);
     }
 
     private void recoverEventDeposit(EventDeposit eventDeposit) {
@@ -110,29 +109,33 @@ class AccountPersistentActor extends AbstractPersistentActor {
     private void receiveCommandDeposit(CommandDeposit commandDeposit) {
         log.info("Command {}", commandDeposit);
         EventDeposit eventDeposit = new EventDeposit(account.accountIdentifier(), commandDeposit.amount());
-        Tagged eventDepositTagged = asTagged(eventDeposit, "account");
 
-        persist(eventDepositTagged, taggedEvent -> {
-            account.deposit(eventDeposit.amount());
-            sender().tell(eventDeposit, self());
-            resetIdleTimeout();
-            persisted = pendingChanges = true;
-            log.info("State change {} deposit {}", account, eventDeposit.amount());
-        });
+        persist(asTagged(eventDeposit, "account"), this::depositPersisted);
+    }
+
+    private void depositPersisted(Tagged tagged) {
+        EventDeposit eventDeposit = (EventDeposit) tagged.payload();
+        account.deposit(eventDeposit.amount());
+        sender().tell(eventDeposit, self());
+        resetIdleTimeout();
+        persisted = pendingChanges = true;
+        log.info("State change {} deposit {}", account, eventDeposit.amount());
     }
 
     private void receiveCommendWithdrawal(CommandWithdrawal commandWithdrawal) {
         log.info("Command {}", commandWithdrawal);
         EventWithdrawal eventWithdrawal = new EventWithdrawal(account.accountIdentifier(), commandWithdrawal.amount());
-        Tagged eventWithdrawalTagged = asTagged(eventWithdrawal, "account");
 
-        persist(eventWithdrawalTagged, taggedEvent -> {
-            account.withdrawal(eventWithdrawal.amount());
-            sender().tell(eventWithdrawal, self());
-            resetIdleTimeout();
-            persisted = pendingChanges = true;
-            log.info("State change {} withdraw {}", account, eventWithdrawal.amount());
-        });
+        persist(asTagged(eventWithdrawal, "account"), this::withdrawalPersisted);
+    }
+
+    private void withdrawalPersisted(Tagged tagged) {
+        EventWithdrawal eventWithdrawal = (EventWithdrawal) tagged.payload();
+        account.withdrawal(eventWithdrawal.amount());
+        sender().tell(eventWithdrawal, self());
+        resetIdleTimeout();
+        persisted = pendingChanges = true;
+        log.info("State change {} withdraw {}", account, eventWithdrawal.amount());
     }
 
     private void getAccount(CommandGetAccount commandGetAccount) {
@@ -191,8 +194,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
         if (idleTimeout != null) {
             idleTimeout.cancel();
         }
-        idleTimeout = context().system().scheduler().schedule(
-                timeout,
+        idleTimeout = context().system().scheduler().scheduleOnce(
                 timeout,
                 self(),
                 new IdleTimeout(timeout),
@@ -212,7 +214,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
                 self());
     }
 
-    private Tagged asTagged(Object event, String ... tags) {
+    private Tagged asTagged(Object event, String... tags) {
         return new Tagged(event, new HashSet<>(Arrays.asList(tags)));
     }
 

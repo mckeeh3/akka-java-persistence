@@ -11,6 +11,7 @@ import akka.persistence.cassandra.query.javadsl.CassandraReadJournal;
 import akka.persistence.query.EventEnvelope;
 import akka.persistence.query.PersistenceQuery;
 import akka.stream.ActorMaterializer;
+import akka.stream.javadsl.Sink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,18 +33,18 @@ public class ExampleCqrs {
         CassandraReadJournal readJournal = cassandraReadJournal(actorSystem);
         //LeveldbReadJournal readJournal = leveldbReadJournal(actorSystem);
 
-
         readJournal
                 .allPersistenceIds()
-                .runForeach(System.out::println, materializer);
+                .runForeach(id -> log.info("Identifier {}", id), materializer);
 
-        ActorRef actor = actorSystem.actorOf(AnActor.props());
+        ActorRef actor = actorSystem.actorOf(AnActor.props(), "process-event");
 
         readJournal
                 .eventsByTag("account", 0L)
                 .mapAsync(5, eventEnvelope -> processEvent(eventEnvelope, actor))
-                .mapAsync(1, this::saveOffset)
-                .runForeach(this::logIdentifier, materializer);
+                //.mapAsync(1, eventEnvelope -> saveOffset(eventEnvelope, actor))
+                .runWith(Sink.ignore(), materializer);
+                //.runForeach(this::logIdentifier, materializer);
     }
 
 //    private LeveldbReadJournal leveldbReadJournal(ActorSystem actorSystem) {
@@ -56,21 +57,18 @@ public class ExampleCqrs {
                 .getReadJournalFor(CassandraReadJournal.class, CassandraReadJournal.Identifier());
     }
 
-    private CompletionStage<EventEnvelope> processEvent(EventEnvelope eventEnvelope) {
-        return null;
-    }
-
-    private CompletionStage<Long> saveOffset(EventEnvelope eventEnvelope) {
-        return null;
-    }
-
     private CompletionStage<EventEnvelope> processEvent(EventEnvelope eventEnvelope, ActorRef a) {
         CompletionStage<Object> f = ask(a, eventEnvelope, 10L);
         return f.thenApplyAsync(e -> eventEnvelope);
     }
 
-    private void logIdentifier(long identifier) {
-        log.info("Identifier {}", identifier);
+    private CompletionStage<EventEnvelope> saveOffset(EventEnvelope eventEnvelope, ActorRef a) {
+        CompletionStage<Object> f = ask(a, eventEnvelope, 10L);
+        return f.thenApplyAsync(e -> eventEnvelope);
+    }
+
+    private void logIdentifier(EventEnvelope eventEnvelope) {
+        log.info("Identifier {}", eventEnvelope.persistenceId());
     }
 
     public static void main(String[] arguments) {
@@ -87,8 +85,8 @@ public class ExampleCqrs {
         }
 
         private void handle(Object message) {
-            System.out.println(message);
             log.info("{} {}", message, sender());
+            sender().tell("ok", self());
         }
 
         static Props props() {
