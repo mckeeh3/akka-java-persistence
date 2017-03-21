@@ -9,6 +9,7 @@ import akka.persistence.AbstractPersistentActor;
 import akka.persistence.RecoveryCompleted;
 import akka.persistence.SaveSnapshotSuccess;
 import akka.persistence.SnapshotOffer;
+import akka.persistence.journal.Tagged;
 import scala.Option;
 import scala.PartialFunction;
 import scala.concurrent.duration.Duration;
@@ -17,6 +18,9 @@ import scala.runtime.BoxedUnit;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -106,26 +110,28 @@ class AccountPersistentActor extends AbstractPersistentActor {
     private void receiveCommandDeposit(CommandDeposit commandDeposit) {
         log.info("Command {}", commandDeposit);
         EventDeposit eventDeposit = new EventDeposit(account.accountIdentifier(), commandDeposit.amount());
+        Tagged eventDepositTagged = asTagged(eventDeposit, "account");
 
-        persist(eventDeposit, event -> {
-            account.deposit(event.amount());
-            sender().tell(event, self());
+        persist(eventDepositTagged, taggedEvent -> {
+            account.deposit(eventDeposit.amount());
+            sender().tell(eventDeposit, self());
             resetIdleTimeout();
             persisted = pendingChanges = true;
-            log.info("State change {} deposit {}", account, event.amount());
+            log.info("State change {} deposit {}", account, eventDeposit.amount());
         });
     }
 
     private void receiveCommendWithdrawal(CommandWithdrawal commandWithdrawal) {
         log.info("Command {}", commandWithdrawal);
         EventWithdrawal eventWithdrawal = new EventWithdrawal(account.accountIdentifier(), commandWithdrawal.amount());
+        Tagged eventWithdrawalTagged = asTagged(eventWithdrawal, "account");
 
-        persist(eventWithdrawal, event -> {
-            account.withdrawal(event.amount());
-            sender().tell(event, self());
+        persist(eventWithdrawalTagged, taggedEvent -> {
+            account.withdrawal(eventWithdrawal.amount());
+            sender().tell(eventWithdrawal, self());
             resetIdleTimeout();
             persisted = pendingChanges = true;
-            log.info("State change {} withdraw {}", account, event.amount());
+            log.info("State change {} withdraw {}", account, eventWithdrawal.amount());
         });
     }
 
@@ -204,6 +210,10 @@ class AccountPersistentActor extends AbstractPersistentActor {
                 new SnapshotTick(),
                 context().system().dispatcher(),
                 self());
+    }
+
+    private Tagged asTagged(Object event, String ... tags) {
+        return new Tagged(event, new HashSet<>(Arrays.asList(tags)));
     }
 
     private static class IdleTimeout {

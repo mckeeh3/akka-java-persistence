@@ -42,10 +42,22 @@
             <artifactId>akka-persistence-query-experimental_2.11</artifactId>
             <version>${akka.version}</version>
         </dependency>
-        <!-- dependency>
+        <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-persistence-cassandra_2.11</artifactId>
             <version>0.23</version>
+        </dependency>
+
+        <!-- dependency>
+            <groupId>org.apache.cassandra</groupId>
+            <artifactId>cassandra-all</artifactId>
+            <version>3.10</version>
+        </dependency>
+        <dependency>
+            <groupId>org.cassandraunit</groupId>
+            <artifactId>cassandra-unit</artifactId>
+            <version>3.0.0.1</version>
+            <scope>test</scope>
         </dependency -->
 
         <dependency>
