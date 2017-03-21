@@ -37,14 +37,12 @@ public class ExampleCqrs {
                 .allPersistenceIds()
                 .runForeach(id -> log.info("Identifier {}", id), materializer);
 
-        ActorRef actor = actorSystem.actorOf(AnActor.props(), "process-event");
+        ActorRef actor = actorSystem.actorOf(UpdateQuerySide.props(), "account-update-query-side");
 
         readJournal
                 .eventsByTag("account", 0L)
                 .mapAsync(5, eventEnvelope -> processEvent(eventEnvelope, actor))
-                //.mapAsync(1, eventEnvelope -> saveOffset(eventEnvelope, actor))
                 .runWith(Sink.ignore(), materializer);
-                //.runForeach(this::logIdentifier, materializer);
     }
 
 //    private LeveldbReadJournal leveldbReadJournal(ActorSystem actorSystem) {
@@ -67,15 +65,11 @@ public class ExampleCqrs {
         return f.thenApplyAsync(e -> eventEnvelope);
     }
 
-    private void logIdentifier(EventEnvelope eventEnvelope) {
-        log.info("Identifier {}", eventEnvelope.persistenceId());
-    }
-
     public static void main(String[] arguments) {
         new ExampleCqrs();
     }
 
-    private static class AnActor extends AbstractActor {
+    private static class UpdateQuerySide extends AbstractActor {
         private final LoggingAdapter log = Logging.getLogger(context().system(), this);
 
         {
@@ -90,7 +84,7 @@ public class ExampleCqrs {
         }
 
         static Props props() {
-            return Props.create(AnActor.class);
+            return Props.create(UpdateQuerySide.class);
         }
     }
 }

@@ -11,21 +11,21 @@ import scala.concurrent.duration.Duration;
 
 import java.math.BigDecimal;
 
-import static akka.sample.persistence.AccountPersistentActor.*;
+import static akka.sample.persistence.AccountWriteSide.*;
 
 
 /**
  * An example of event sourcing with Akka persistence.
  *
  * <p>This example contains an actor that simulates the interaction of actors with persistence actors. The {@link
- * Runner} actor is used to send messages to the {@link AccountsActor}. These messages are commands to be processed by
- * the {@link AccountPersistentActor}.</p>
+ * Runner} actor is used to send messages to the {@link AccountsWriteSide}. These messages are commands to be processed by
+ * the {@link AccountWriteSide}.</p>
  *
  * <p>The {@link #runExamples()} method sends a series of commands to the {@link Runner} actor, which in turn sends
- * these commands to the {@link AccountsActor}. The {@link Runner} actor is also used to receive response messages
- * from the {@link AccountPersistentActor} actors.</p>
+ * these commands to the {@link AccountsWriteSide}. The {@link Runner} actor is also used to receive response messages
+ * from the {@link AccountWriteSide} actors.</p>
  *
- * <p>The tests are split by periods of idle time. This is to allow for showing the the {@link AccountPersistentActor}
+ * <p>The tests are split by periods of idle time. This is to allow for showing the the {@link AccountWriteSide}
  * actor stops after a period of idle time. The last thing done at the conclusion of the test run is to perform a
  * series of get commands that retrieve the account entity. The account entity balance is then withdrawn. This is done
  * to set the account balance to zero.</p>
@@ -46,7 +46,7 @@ public class ExampleEventSourcing {
     }
 
     private void runExamples() {
-        ActorRef accounts = actorSystem.actorOf(AccountsActor.props(), "accounts");
+        ActorRef accounts = actorSystem.actorOf(AccountsWriteSide.props(), "accounts");
         ActorRef runner = actorSystem.actorOf(Runner.props(accounts), "runner");
 
         runner.tell(deposit(AccountIdentifier.create("100"), CurrencyValue.create(100)), null);

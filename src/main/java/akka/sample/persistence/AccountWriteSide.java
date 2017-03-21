@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * An account persistence actor with a banking account state.
  */
-class AccountPersistentActor extends AbstractPersistentActor {
+class AccountWriteSide extends AbstractPersistentActor {
     private final LoggingAdapter log = Logging.getLogger(context().system(), this);
     private Account account;
     private Cancellable snapshotScheduler;
@@ -38,7 +38,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
         scheduleSnapshot();
     }
 
-    AccountPersistentActor(AccountIdentifier accountIdentifier) {
+    AccountWriteSide(AccountIdentifier accountIdentifier) {
         this.account = new Account(accountIdentifier, CurrencyValue.zero());
     }
 
@@ -48,7 +48,7 @@ class AccountPersistentActor extends AbstractPersistentActor {
     }
 
     static Props props(AccountIdentifier accountIdentifier) {
-        return Props.create(AccountPersistentActor.class, accountIdentifier);
+        return Props.create(AccountWriteSide.class, accountIdentifier);
     }
 
     @Override
