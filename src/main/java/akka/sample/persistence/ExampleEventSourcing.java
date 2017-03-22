@@ -47,7 +47,7 @@ public class ExampleEventSourcing {
 
     private void runExamples() {
         ActorRef accounts = actorSystem.actorOf(AccountsWriteSide.props(), "accounts");
-        ActorRef runner = actorSystem.actorOf(Runner.props(accounts), "runner");
+        ActorRef runner = actorSystem.actorOf(Runner.props(accounts), "accounts-write-side");
 
         runner.tell(deposit(AccountIdentifier.create("100"), CurrencyValue.create(100)), null);
         runner.tell(deposit(AccountIdentifier.create("200"), CurrencyValue.create(50)), null);
