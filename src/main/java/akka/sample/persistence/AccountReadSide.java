@@ -4,6 +4,7 @@ import akka.actor.AbstractLoggingActor;
 import akka.actor.Props;
 import akka.actor.ReceiveTimeout;
 import akka.japi.pf.ReceiveBuilder;
+import akka.persistence.query.EventEnvelope;
 import akka.sample.persistence.AccountWriteSide.EventDeposit;
 import akka.sample.persistence.AccountWriteSide.EventWithdrawal;
 import scala.concurrent.duration.Duration;
@@ -18,25 +19,33 @@ public class AccountReadSide extends AbstractLoggingActor {
 
     {
         receive(ReceiveBuilder
-                .match(EventDeposit.class, this::deposit)
-                .match(EventWithdrawal.class, this::withdrawal)
+                .match(EventEnvelope.class, this::processEvent)
                 .match(ReceiveTimeout.class, this::receiveTimeout)
                 .build());
 
         context().setReceiveTimeout(Duration.create(10, TimeUnit.SECONDS));
     }
 
+    private void processEvent(EventEnvelope eventEnvelope) {
+        log().info("Update {}", eventEnvelope);
+        if (isDeposit(eventEnvelope)) {
+            deposit((EventDeposit) eventEnvelope.event(), eventEnvelope.offset());
+        } else if (isWithdrawal(eventEnvelope)) {
+            withdrawal((EventWithdrawal) eventEnvelope.event(), eventEnvelope.offset());
+        }
+    }
+
     public AccountReadSide(AccountIdentifier accountIdentifier) {
         this.accountIdentifier = accountIdentifier;
     }
 
-    private void deposit(EventDeposit eventDeposit) {
-        log().info("Update {}", eventDeposit);
+    private void deposit(EventDeposit eventDeposit, long offset) {
+        log().info("Update {}, offset {}", eventDeposit, offset);
         // TODO update the query side
     }
 
-    private void withdrawal(EventWithdrawal eventWithdrawal) {
-        log().info("Update {}", eventWithdrawal);
+    private void withdrawal(EventWithdrawal eventWithdrawal, long offset) {
+        log().info("Update {}, offset {}", eventWithdrawal, offset);
         // TODO update the query side
     }
 
@@ -49,6 +58,14 @@ public class AccountReadSide extends AbstractLoggingActor {
     public void postStop() throws Exception {
         context().setReceiveTimeout(Duration.Undefined());
         log().info("Stop {}", accountIdentifier);
+    }
+
+    private boolean isDeposit(EventEnvelope eventEnvelope) {
+        return eventEnvelope.event() instanceof EventDeposit;
+    }
+
+    private boolean isWithdrawal(EventEnvelope eventEnvelope) {
+        return eventEnvelope.event() instanceof EventWithdrawal;
     }
 
     private void receiveTimeout(ReceiveTimeout receiveTimeout) {
