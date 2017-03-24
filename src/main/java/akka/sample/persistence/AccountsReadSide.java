@@ -32,7 +32,7 @@ class AccountsReadSide extends AbstractLoggingActor {
                 .build());
 
         readJournal
-                .eventsByTag("account", 0L)
+                .eventsByTag("account", 0L) // TODO need to start from a know offset
                 .mapAsync(5, eventEnvelope -> processEvent(eventEnvelope, self()))
                 .runWith(Sink.ignore(), materializer);
     }

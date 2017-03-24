@@ -32,34 +32,34 @@ class AccountReadSide extends AbstractLoggingActor {
 
     private void processEvent(EventEnvelope eventEnvelope) {
         if (isDeposit(eventEnvelope)) {
-            deposit((EventDeposit) eventEnvelope.event(), eventEnvelope.sequenceNr());
+            deposit((EventDeposit) eventEnvelope.event(), eventEnvelope.offset());
         }
         else if (isWithdrawal(eventEnvelope)) {
-            withdrawal((EventWithdrawal) eventEnvelope.event(), eventEnvelope.sequenceNr());
+            withdrawal((EventWithdrawal) eventEnvelope.event(), eventEnvelope.offset());
         }
         else {
             notProcessed(eventEnvelope);
         }
     }
 
-    private void deposit(EventDeposit eventDeposit, long sequenceNr) {
-        log().info("Update {}, sequence {}", eventDeposit, sequenceNr);
+    private void deposit(EventDeposit eventDeposit, long offset) {
+        log().info("Update {}, offset {}", eventDeposit, offset);
         // TODO update the query side
-        // Assume that the query side persists the event log sequence.
-        // Assume that an update is conditionally performed by validating the sequence.
+        // Assume that the query side persists the event log offset.
+        // Assume that an update is conditionally performed by validating the offset.
         // Assume that the query side has primary key == entity identifier.
-        // For example, update where sequence < :envelope.sequence
-        sender().tell(String.format("Processed deposit %s %d", eventDeposit, sequenceNr), self());
+        // For example, update where offset < :envelope.offset
+        sender().tell(String.format("Processed deposit %s %d", eventDeposit, offset), self());
     }
 
-    private void withdrawal(EventWithdrawal eventWithdrawal, long sequenceNr) {
-        log().info("Update {}, sequence {}", eventWithdrawal, sequenceNr);
+    private void withdrawal(EventWithdrawal eventWithdrawal, long offset) {
+        log().info("Update {}, offset {}", eventWithdrawal, offset);
         // TODO update the query side
-        // Assume that the query side persists the event log sequence.
-        // Assume that an update is conditionally performed by validating the sequence.
+        // Assume that the query side persists the event log offset.
+        // Assume that an update is conditionally performed by validating the offset.
         // Assume that the query side has primary key == entity identifier.
-        // For example, update where sequence < :envelope.sequence
-        sender().tell(String.format("Processed %s %d", eventWithdrawal, sequenceNr), self());
+        // For example, update where offset < :envelope.offset
+        sender().tell(String.format("Processed %s %d", eventWithdrawal, offset), self());
     }
 
     private void notProcessed(EventEnvelope eventEnvelope) {
