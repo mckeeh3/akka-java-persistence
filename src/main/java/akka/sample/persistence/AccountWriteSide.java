@@ -1,7 +1,10 @@
 package akka.sample.persistence;
 
+import akka.actor.ActorSystem;
 import akka.actor.Cancellable;
 import akka.actor.Props;
+import akka.cluster.Cluster;
+import akka.cluster.Member;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import akka.japi.pf.ReceiveBuilder;
@@ -280,7 +283,16 @@ class AccountWriteSide extends AbstractPersistentActor {
         }
     }
 
-    static public class EventDeposit implements Serializable {
+    static abstract class EventTag {
+        static void a(ActorSystem actorSystem) {
+            Cluster cluster = Cluster.get(actorSystem);
+            for (Member member : cluster.state().getMembers()) {
+                member.upNumber();
+            }
+        }
+    }
+
+    static class EventDeposit implements Serializable {
         private final AccountIdentifier accountIdentifier;
         private final CurrencyValue amount;
         private final LocalDateTime time;
