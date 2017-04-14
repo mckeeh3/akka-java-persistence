@@ -1,9 +1,6 @@
 package akka.sample.persistence;
 
-import akka.actor.AbstractLoggingActor;
-import akka.actor.ActorRef;
-import akka.actor.ActorSystem;
-import akka.actor.Props;
+import akka.actor.*;
 import akka.japi.pf.ReceiveBuilder;
 import akka.persistence.cassandra.query.javadsl.CassandraReadJournal;
 import akka.persistence.query.EventEnvelope;
@@ -26,15 +23,18 @@ class AccountsReadSide extends AbstractLoggingActor {
         final ActorMaterializer materializer = ActorMaterializer.create(context().system());
         final CassandraReadJournal readJournal = cassandraReadJournal(context().system());
 
-        receive(ReceiveBuilder
-                .match(EventEnvelope.class, this::taggedEvent)
-                .matchAny(this::unhandled)
-                .build());
-
         readJournal
                 .eventsByTag("account", 0L) // TODO need to start from a know offset
                 .mapAsync(5, eventEnvelope -> processEvent(eventEnvelope, self()))
                 .runWith(Sink.ignore(), materializer);
+    }
+
+    @Override
+    public Receive createReceive() {
+        return ReceiveBuilder.create()
+                .match(EventEnvelope.class, this::taggedEvent)
+                .matchAny(this::unhandled)
+                .build();
     }
 
     private void taggedEvent(EventEnvelope eventEnvelope) {
@@ -47,7 +47,8 @@ class AccountsReadSide extends AbstractLoggingActor {
         }
         else if (eventEnvelope.event() instanceof EventWithdrawal) {
             return ((EventWithdrawal) eventEnvelope.event()).accountIdentifier();
-        } else {
+        }
+        else {
             return null;
         }
     }

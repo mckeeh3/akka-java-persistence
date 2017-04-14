@@ -1,9 +1,6 @@
 package akka.sample.persistence;
 
-import akka.actor.AbstractLoggingActor;
-import akka.actor.ActorRef;
-import akka.actor.ActorSystem;
-import akka.actor.Props;
+import akka.actor.*;
 import akka.japi.pf.ReceiveBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,15 +13,15 @@ import static akka.sample.persistence.AccountWriteSide.*;
 
 /**
  * An example of event sourcing with Akka persistence.
- *
+ * <p>
  * <p>This example contains an actor that simulates the interaction of actors with persistence actors. The {@link
  * Runner} actor is used to send messages to the {@link AccountsWriteSide}. These messages are commands to be processed by
  * the {@link AccountWriteSide}.</p>
- *
+ * <p>
  * <p>The {@link #runExamples()} method sends a series of commands to the {@link Runner} actor, which in turn sends
  * these commands to the {@link AccountsWriteSide}. The {@link Runner} actor is also used to receive response messages
  * from the {@link AccountWriteSide} actors.</p>
- *
+ * <p>
  * <p>The tests are split by periods of idle time. This is to allow for showing the the {@link AccountWriteSide}
  * actor stops after a period of idle time. The last thing done at the conclusion of the test run is to perform a
  * series of get commands that retrieve the account entity. The account entity balance is then withdrawn. This is done
@@ -101,7 +98,8 @@ public class ExampleEventSourcing {
     private void sleep(Duration duration) {
         try {
             Thread.sleep(duration.toMillis());
-        } catch (InterruptedException e) {
+        }
+        catch (InterruptedException e) {
             // ignore
         }
     }
@@ -114,8 +112,10 @@ public class ExampleEventSourcing {
     private static class Runner extends AbstractLoggingActor {
         private final ActorRef accounts;
 
-        {
-            receive(ReceiveBuilder
+
+        @Override
+        public Receive createReceive() {
+            return ReceiveBuilder.create()
                     .match(CommandDeposit.class, this::sendDeposit)
                     .match(CommandWithdrawal.class, this::sendWithdrawal)
                     .match(CommandGetAccount.class, this::sendGetAccountRequest)
@@ -124,7 +124,7 @@ public class ExampleEventSourcing {
                     .match(GetAccountResponse.class, this::getAccountResponse)
                     .match(GetAccountNotFound.class, this::getAccountNotFound)
                     .matchAny(this::unhandledMessage)
-                    .build());
+                    .build();
         }
 
         private Runner(ActorRef accounts) {

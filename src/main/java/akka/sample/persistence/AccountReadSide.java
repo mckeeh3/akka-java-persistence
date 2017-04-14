@@ -18,12 +18,15 @@ class AccountReadSide extends AbstractLoggingActor {
     private final AccountIdentifier accountIdentifier;
 
     {
-        receive(ReceiveBuilder
+        context().setReceiveTimeout(Duration.create(10, TimeUnit.SECONDS));
+    }
+
+    @Override
+    public Receive createReceive() {
+        return ReceiveBuilder.create()
                 .match(EventEnvelope.class, this::processEvent)
                 .match(ReceiveTimeout.class, this::receiveTimeout)
-                .build());
-
-        context().setReceiveTimeout(Duration.create(10, TimeUnit.SECONDS));
+                .build();
     }
 
     public AccountReadSide(AccountIdentifier accountIdentifier) {
@@ -32,10 +35,10 @@ class AccountReadSide extends AbstractLoggingActor {
 
     private void processEvent(EventEnvelope eventEnvelope) {
         if (isDeposit(eventEnvelope)) {
-            deposit((EventDeposit) eventEnvelope.event(), eventEnvelope.offset());
+            deposit((EventDeposit) eventEnvelope.event(), eventEnvelope.sequenceNr());
         }
         else if (isWithdrawal(eventEnvelope)) {
-            withdrawal((EventWithdrawal) eventEnvelope.event(), eventEnvelope.offset());
+            withdrawal((EventWithdrawal) eventEnvelope.event(), eventEnvelope.sequenceNr());
         }
         else {
             notProcessed(eventEnvelope);

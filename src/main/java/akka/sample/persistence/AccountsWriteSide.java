@@ -8,7 +8,7 @@ import scala.Option;
 
 /**
  * The actor that provides access to accounts.
- *
+ * <p>
  * <p>This actor delegates messages to specific {@link AccountWriteSide} actors based on the account identifier.
  * If an instance of the {@link AccountWriteSide} does not exist then one is created as a child actor and the
  * message is forwarded to the child. If the instance already exists then the message is forwarded to the child.</p>
@@ -18,12 +18,13 @@ class AccountsWriteSide extends AbstractLoggingActor {
         return Props.create(AccountsWriteSide.class);
     }
 
-    {
-        receive(ReceiveBuilder
+    @Override
+    public Receive createReceive() {
+        return ReceiveBuilder.create()
                 .match(AccountWriteSide.CommandDeposit.class, this::deposit)
                 .match(AccountWriteSide.CommandWithdrawal.class, this::withdrawal)
                 .match(AccountWriteSide.CommandGetAccount.class, this::getAccount)
-                .build());
+                .build();
     }
 
     private void deposit(AccountWriteSide.CommandDeposit deposit) {
@@ -42,7 +43,8 @@ class AccountsWriteSide extends AbstractLoggingActor {
         Option<ActorRef> accountRefOption = context().child(accountIdentifier.identifier());
         if (accountRefOption.isDefined()) {
             accountRefOption.get().forward(message, context());
-        } else {
+        }
+        else {
             ActorRef accountRef = context().actorOf(AccountWriteSide.props(accountIdentifier), accountIdentifier.identifier());
             accountRef.forward(message, context());
         }

@@ -1,5 +1,6 @@
 package akka.sample.persistence;
 
+import akka.actor.AbstractActor;
 import akka.actor.ActorSystem;
 import akka.actor.Cancellable;
 import akka.actor.Props;
@@ -55,8 +56,8 @@ class AccountWriteSide extends AbstractPersistentActor {
     }
 
     @Override
-    public PartialFunction<Object, BoxedUnit> receiveRecover() {
-        return ReceiveBuilder
+    public Receive createReceiveRecover() {
+        return ReceiveBuilder.create()
                 .match(EventDeposit.class, this::recoverEventDeposit)
                 .match(EventWithdrawal.class, this::recoverEventWithdrawal)
                 .match(SnapshotOffer.class, this::recoverSnapshot)
@@ -65,8 +66,8 @@ class AccountWriteSide extends AbstractPersistentActor {
     }
 
     @Override
-    public PartialFunction<Object, BoxedUnit> receiveCommand() {
-        return ReceiveBuilder
+    public Receive createReceive() {
+        return ReceiveBuilder.create()
                 .match(CommandDeposit.class, this::receiveCommandDeposit)
                 .match(CommandWithdrawal.class, this::receiveCommendWithdrawal)
                 .match(CommandGetAccount.class, this::getAccount)
@@ -119,7 +120,7 @@ class AccountWriteSide extends AbstractPersistentActor {
     private void depositPersisted(Tagged tagged) {
         EventDeposit eventDeposit = (EventDeposit) tagged.payload();
         account.deposit(eventDeposit.amount());
-        sender().tell(eventDeposit, self());
+        getSender().tell(eventDeposit, self());
         resetIdleTimeout();
         persisted = pendingChanges = true;
         log.info("State change {} deposit {}", account, eventDeposit.amount());
@@ -135,7 +136,7 @@ class AccountWriteSide extends AbstractPersistentActor {
     private void withdrawalPersisted(Tagged tagged) {
         EventWithdrawal eventWithdrawal = (EventWithdrawal) tagged.payload();
         account.withdrawal(eventWithdrawal.amount());
-        sender().tell(eventWithdrawal, self());
+        getSender().tell(eventWithdrawal, self());
         resetIdleTimeout();
         persisted = pendingChanges = true;
         log.info("State change {} withdraw {}", account, eventWithdrawal.amount());
@@ -143,10 +144,10 @@ class AccountWriteSide extends AbstractPersistentActor {
 
     private void getAccount(CommandGetAccount commandGetAccount) {
         if (persisted) {
-            sender().tell(new GetAccountResponse(account), self());
+            getSender().tell(new GetAccountResponse(account), self());
             log.info("Get account {}", account);
         } else {
-            sender().tell(new GetAccountNotFound(commandGetAccount.accountIdentifier()), self());
+            getSender().tell(new GetAccountNotFound(commandGetAccount.accountIdentifier()), self());
             log.info("Get account {} not found", commandGetAccount.accountIdentifier);
         }
     }
