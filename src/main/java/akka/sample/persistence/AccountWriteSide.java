@@ -1,6 +1,5 @@
 package akka.sample.persistence;
 
-import akka.actor.AbstractActor;
 import akka.actor.ActorSystem;
 import akka.actor.Cancellable;
 import akka.actor.Props;
@@ -15,10 +14,8 @@ import akka.persistence.SaveSnapshotSuccess;
 import akka.persistence.SnapshotOffer;
 import akka.persistence.journal.Tagged;
 import scala.Option;
-import scala.PartialFunction;
 import scala.concurrent.duration.Duration;
 import scala.concurrent.duration.FiniteDuration;
-import scala.runtime.BoxedUnit;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
